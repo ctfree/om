@@ -237,7 +237,7 @@ metric，以收集应用数据等。它主要提供了以下方式：
 [第三方扩展收集到一起了](https://github.com/ganglia/gmond_python_modules)
 ，可以用来监控诸如redis、MySQL 等等应用，可以根据需要选用。
 
-这里通过实际中添加的wcache 监控 来说明如何使用ganglia python 扩展
+这里通过实际中添加的wcache监控,来说明如何使用ganglia python 扩展
 
 要增加一个扩展需要修改三个地方：  
 
