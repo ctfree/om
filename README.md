@@ -177,11 +177,6 @@ Ganglia的层次化结构做的非常好，由小到大可以分为node -&gt; cl
     ./install.sh gmond
 ```
 
-安装完成后可以通过http://ip:port/ganglia 访问查看监控信息  
-ip： 主节点ip  
-port：apache 服务端口  
-
-
 
 #3. 配置
 
@@ -224,17 +219,21 @@ cluster {
    service http reload  // 启动ganglia-web 服务
 ```
 
+服务配置启动后可以通过http://ip:port/ganglia 访问查看监控信息  
+ip： 主节点ip  
+port：apache 服务端口  
+
 #4. 扩展
 
+Ganglia 默认提供了很多系统数据的监控，包括磁盘，cpu，内存，网络... 同时如果希望能够监控自身应用或者其他信息，就需要对Ganglia进行扩展。
 Ganglia 的扩展性很强，可以很方便使用其提供的一些机制来创建自定义的
 metric，以收集应用数据等。它主要提供了以下方式：
 
 1. Python 扩展
 2. gmetric 命令
 
-而 ganglia 的数据格式和协议是完全开放的，第三方应用也完全可以按照其格
-式发送 metric 数据给 gmond。Ganglia 官方也将一些
-[第三方扩展收集到一起了](https://github.com/ganglia/gmond_python_modules)
+而 ganglia 的数据格式和协议是完全开放的，第三方应用也完全可以按照其格式发送 metric 数据给 gmond。Ganglia 官方也将一些
+[第三方扩展](https://github.com/ganglia/gmond_python_modules)收集到一起了
 ，可以用来监控诸如redis、MySQL 等等应用，可以根据需要选用。
 
 这里通过实际中添加的wcache监控,来说明如何使用ganglia python 扩展
