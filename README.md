@@ -1,6 +1,6 @@
 
 
-#原理
+##原理
 Ganglia是一个集群监控工具，由UC Berkeley创建并开源。Ganglia的中文意思是神经中枢，现在支持多部分操作系统（包括linux、unix、windows），可支持2000个节点的网络监控（当然这不是上限，只是一个大集群使用的范例）。
 
 **基本结构**
@@ -28,18 +28,7 @@ Ganglia的层次化结构做的非常好，由小到大可以分为node -&gt; cl
   安装脚本如下：
 
 ```bash
-  cd /usr/local/src
-  wget http://savannah.nongnu.org/download/confuse/confuse-2.7.tar.gz
-  tar -xzvf confuse-2.7.tar.gz
-  cd confuse-2.7
-  ./configure CFLAGS=-fPIC --disable-nls --prefix=/usr/local/confuse
-  make
-  make install
-  mkdir -p /usr/local/confuse/lib64
-  cp -a -f /usr/local/confuse/lib/* /usr/local/confuse/lib64/
-  echo "/usr/local/confuse/lib" >> /etc/ld.so.conf.d/my-lib.conf
 
-```
 
 	version=3.6.1
 	
@@ -165,7 +154,7 @@ Ganglia的层次化结构做的非常好，由小到大可以分为node -&gt; cl
 	print_usage
 	echo "changed=no comment='Unknown argument: $1'"
 
-
+```
 
 ##配置
 
