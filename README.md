@@ -3,23 +3,24 @@
 
 Ganglia是一个集群监控工具，由UC Berkeley创建并开源。Ganglia的中文意思是神经中枢，现在支持多部分操作系统（包括linux、unix、windows），可支持2000个节点的网络监控（当然这不是上限，只是一个大集群使用的范例）。
 
-**基本结构**
+**进程组件**
 
-Ganglia底层使用RRDTool获得数据，Ganglia主要分为两个进程组件：
+Ganglia底层使用RRDTool获得数据，Ganglia主要分三个进程组件：
 
-*   gmond（**g**anglia **mon**itor **d**eamon） 每个被检测的节点或集群运行一个gmond进程，进行监控数据的收集、汇总和发送。gmond即可以作为发送者（收集本机数据），也可以作为接收者（汇总多个节点的数据）
+*   gmond（ganglia monitor deamon） 每个被检测的节点或集群运行一个gmond进程，进行监控数据的收集、汇总和发送。gmond即可以作为发送者（收集本机数据），也可以作为接收者（汇总多个节点的数据）
 
-*   gmetad（**g**anglia **meta**data **d**eamon） 通常在整个监控体系中只有一个gmetad进程。该进程定期检查所有的gmonds，主动收集数据，并存储在RRD存储引擎中。
+*   gmetad（ganglia metadata deamon） 通常在整个监控体系中只有一个gmetad进程。该进程定期检查所有的gmonds，主动收集数据，并存储在RRD存储引擎中。
 
 *   ganglia-web 使用php编写的web界面，以图表的方式展现存储在RRD中的数据。通常与gmetad进程运行在一起。
 
-
-其中，gmond运行在集群每个节点上，收集RRDTool产生的数据；gmetad运行在监控服务器上，收集每个gmond的数据。Ganglia还提供了一个PHP实现的web front end，一般使用Apache2作为其运行环境，通过Web Front可以看到直观的各种集群数据图表。
+**部署结构**
 
 Ganglia的层次化结构做的非常好，由小到大可以分为node -&gt; cluster -&gt; grid，这三个层次。
 
 *   一个**node**就是一个需要监控的节点，一般是个主机，用IP表示。每个node上运行一个gmond进程用来采集数据，并提交给gmetad。
+
 *   一个**cluster**由多个node组成，就是一个集群，我们可以给集群定义名字。一个集群可以选一个node运行gmetad进程，汇总/拉取gmond提交的数据，并部署web front，将gmetad采集的数据用图表展示出来。
+
 *   一个**grid**由多个cluster组成，是一个更高层面的概念，我们可以给grid定义名字。grid中可以定义一个顶级的gmetad进程，汇总/拉取多个gmond、子gmetad提交的数据，部署web front，将顶级gmetad采集的数据用图表展示出来。
 
 显然，这种方式非常灵活，可以实现多种结构的数据监控。由下图，我们可以清晰的看出这种层次化的结构，和不同的部署方式。
@@ -194,29 +195,12 @@ port：apache 服务端口
 *  被监控节点上配置gmond：打开/etc/ganglia/gmond.conf 修改 cluster name ：  
 
 ```
-    globals {                   
-          ....             
-        setuid = yes
-          ....   
-    }
-
-    cluster {
-        name = "my cluster" // 这个名称很重要
-        owner = "nobody"
-        ....
-    }
-
-    udp_send_channel {
-        host = 192.168.1.5 // 使用host为单播，mcast_join为多播
-        port = 8649
-        ttl = 1
-    }
-
-    udp_recv_channel { // 如果使用单机广播，要删除“mcast_join”和“bind”
-        /* mcast_join = 239.2.11.71 */
-        port = 8649
-        /* bind = 239.2.11.71 */
-    }
+cluster { 
+    name = "my cluster"
+    owner = "fonsview"
+    latlong = "unspecified"
+    url = "unspecified" 
+}
 ```
 
 *  配置 ganglia-web,打开/etc/httpd/conf.d/ganglia.conf：
@@ -249,8 +233,7 @@ metric，以收集应用数据等。它主要提供了以下方式：
 2. gmetric 命令
 
 而 ganglia 的数据格式和协议是完全开放的，第三方应用也完全可以按照其格
-式发送 metric 数据给 gmond。  
-Ganglia 官方也将一些
+式发送 metric 数据给 gmond。Ganglia 官方也将一些
 [第三方扩展收集到一起了](https://github.com/ganglia/gmond_python_modules)
 ，可以用来监控诸如redis、MySQL 等等应用，可以根据需要选用。
 
@@ -258,15 +241,15 @@ Ganglia 官方也将一些
 
 要增加一个扩展需要修改三个地方：  
 
-1.  python 脚本 /usr/local/ganglia/lib64/ganglia/python_modules/
-2.  pyconf配置 /etc/ganglia/conf.d/
-3.  metric graphic 配置 /var/www/html/ganglia/graph.d/
+1.  python 脚本 位于/usr/local/ganglia/lib64/ganglia/python_modules/
+2.  pyconf 配置 位于/etc/ganglia/conf.d/
+3.  graph  配置 位于/var/www/html/ganglia/graph.d/
 
 下面逐一介绍
 
 ##4.1 python脚本
 
-python 脚本用于向gmond 添加自定义的模块，模块中必须包含的三个方法是：
+python 脚本用于向gmond添加自定义的模块，模块中必须包含的三个方法是：
 
 def metric_init(params):
 
@@ -304,10 +287,196 @@ gmond关掉的时候执行，不能返回值。
 **def metric_handler(name)**:
 可以取任何的名字，要在call_back中调用，使用的是get_stat。
 
+/usr/local/ganglia/lib64/ganglia/python_modules/wcache.py 脚本较长， 
+见附录 wcache.py。
 
 
-/usr/local/ganglia/lib64/ganglia/python_modules/wcache.py 脚本如下:
 
+
+##4.2 pyconf 
+pyconf是python模块的配置文件:
+
+**Modules**:对每个模块进行配置  
+**name**:模块名,同时必须与创建的python文件名一致  
+**language**: 语言  
+**param**:参数列表，所有的参数作为一个dict(即map)传给python脚本的metric_init(params)函数。  
+
+
+**collection_group**:需要收集的metric列表，一个模块中可以扩展任意个metric  
+**collect_every**: 汇报周期，以秒为单位。  
+**metric**：可以有多个，定义每个metric的信息。  
+
+/etc/ganglia/conf.d/wcache.pyconf代码如下
+
+```python
+
+#/* wcache server metrics */
+#
+modules {
+  module {
+    name = "wcache"
+    language = "python"
+  }
+}
+
+collection_group {
+  collect_every = 30
+  time_threshold = 60
+  metric {
+    name = wcache_ClientHttpRequests_5m
+    title = "Client Http Per Second requests 5m"
+  }
+  metric {
+    name = wcache_ClientHttpErrors_5m
+    title = "Client Http Per Second errors 5min"
+  }
+  metric {
+    name = wcache_ClientHttpRequests_60m
+    title = "Client Http Per Second requests 60m"
+  }
+  metric {
+    name = wcache_ClientHttpErrors_60m
+    title = "Client Http Per Second errors 60min"
+  }
+  metric {
+    name = wcache_ReqHitRatio_5m
+    title = "Hits as % of all requests 5min"
+  }
+  metric {
+    name = wcache_MemHitRatio_5m
+    title = "Memory Hits as % of hit requests 5min"
+  }
+  metric {
+    name = wcache_DiskHitRatio_5m
+    title = "Disk Hits as % of hit requests 5min"
+  }
+  metric {
+    name = wcache_ByteHitRatio_5m
+    title = "Hits as % of bytes sent 5min"
+  }
+  metric {
+    name = wcache_ReqHitRatio_60m
+    title = "Hits as % of all requests 60min"
+  }
+  metric {
+    name = wcache_MemHitRatio_60m
+    title = "Memory Hits as % of hit requests 60min"
+  }
+  metric {
+    name = wcache_DiskHitRatio_60m
+    title = "Disk Hits as % of hit requests 60min"
+  }
+  metric {
+    name = wcache_ByteHitRatio_60m
+    title = "Hits as % of bytes sent 60min"
+  }
+  metric {
+    name = wcache_HttpRequestNumber
+    title = "Number of HTTP requests received"
+  }
+  metric {
+    name = wcache_RequestFailureRatio
+    title = "Request failure ratio"
+  }
+  metric {
+    name = wcache_StorageSwapCapacity
+    title = "Storage Swap capacity"
+  }
+  metric {
+    name = wcache_StorageMemCapacity
+    title = "Storage Mem capacity"
+  }
+  metric {
+    name = wcache_MeanObjectSize
+    title = "Mean Object Size"
+  }
+  metric {
+    name = wcache_ServiceTime
+    title = "Median Service Times"
+  }
+  metric {
+    name = wcache_HitServiceTime
+    title = "Hit Median Service Times"
+  }
+  metric {
+    name = wcache_MissServiceTime
+    title = "Miss Median Service Times"
+  }
+  metric {
+    name = wcache_StoreEntries
+    title = "StoreEntries"
+  }
+  metric {
+    name = wcache_MemStoreEntries
+    title = "StoreEntries with MemObjects"
+  }
+}
+
+
+```
+
+
+
+##4.3 graph 配置
+
+数据收集完成后，还需要将数据已图表的形式展示在Ganglia web界面中。所以需要配置前端数据展示方式
+
+为了将几个相同的属性放置到一张report图表中，配置如下
+
+/var/www/html/ganglia/graph.d/wcache_HitRatio_1h_report.json
+
+```python
+{
+    "report_name": "wcache_HitRatio_1h_report",
+    "report_type": "standard",
+    "title": "wcache 1 hour HitRatio",
+    "vertical_label": "precent",
+    "series": [{
+        "metric": "wcache_ReqHitRatio_1h",
+        "color": "3366ff",
+        "label": "ReqHitRatio",
+        "line_width": "2",
+        "type": "line"
+    }, {
+        "metric": "wcache_ByteHitRatio_1h",
+        "color": "cc99ff",
+        "label": "ByteHitRatio",
+        "line_width": "2",
+        "type": "line"
+    }, {
+        "metric": "wcache_MemHitRatio_1h",
+        "color": "ff3366",
+        "label": "MemHitRatio",
+        "line_width": "2",
+        "type": "line"
+    }, {
+        "metric": "wcache_DiskHitRatio_1h",
+        "color": "00ff00",
+        "label": "DiskHitRatio",
+        "line_width": "2",
+        "type": "line"
+    }]
+}
+
+```
+
+
+配置完成后，report图表还不会显示到ganglia-web 上，需要修改
+/var/lib/ganglia-web/conf/default.json,将wcache_HitRatio_1h_report 加入
+```json
+{
+    "included_reports": ["load_report", "mem_report", "cpu_report", "multicpu_idle_report", "network_report", "wcache_HitRatio_1h_report"]
+}
+
+```
+
+
+所有脚本配置完成后，重新启动gmond 服务。观察前端web数据，查看模块添加是否成功 。
+
+
+#5. 附录
+##5.1 wcache.py
+<span id="jump">wcache.py</span>
 ```python
 
 import sys
@@ -766,185 +935,3 @@ if __name__ == '__main__':
             print 'value for %s is %4.2f %s' % (d['name'], v, d['units'])
 
 ```
-
-
-##4.2 pyconf 
-pyconf是python模块的配置文件，/etc/ganglia/conf.d/wcache.pyconf代码如下
-
-```python
-
-#/* wcache server metrics */
-#
-modules {
-  module {
-    name = "wcache"
-    language = "python"
-  }
-}
-
-collection_group {
-  collect_every = 30
-  time_threshold = 60
-  metric {
-    name = wcache_ClientHttpRequests_5m
-    title = "Client Http Per Second requests 5m"
-  }
-  metric {
-    name = wcache_ClientHttpErrors_5m
-    title = "Client Http Per Second errors 5min"
-  }
-  metric {
-    name = wcache_ClientHttpRequests_60m
-    title = "Client Http Per Second requests 60m"
-  }
-  metric {
-    name = wcache_ClientHttpErrors_60m
-    title = "Client Http Per Second errors 60min"
-  }
-  metric {
-    name = wcache_ReqHitRatio_5m
-    title = "Hits as % of all requests 5min"
-  }
-  metric {
-    name = wcache_MemHitRatio_5m
-    title = "Memory Hits as % of hit requests 5min"
-  }
-  metric {
-    name = wcache_DiskHitRatio_5m
-    title = "Disk Hits as % of hit requests 5min"
-  }
-  metric {
-    name = wcache_ByteHitRatio_5m
-    title = "Hits as % of bytes sent 5min"
-  }
-  metric {
-    name = wcache_ReqHitRatio_60m
-    title = "Hits as % of all requests 60min"
-  }
-  metric {
-    name = wcache_MemHitRatio_60m
-    title = "Memory Hits as % of hit requests 60min"
-  }
-  metric {
-    name = wcache_DiskHitRatio_60m
-    title = "Disk Hits as % of hit requests 60min"
-  }
-  metric {
-    name = wcache_ByteHitRatio_60m
-    title = "Hits as % of bytes sent 60min"
-  }
-  metric {
-    name = wcache_HttpRequestNumber
-    title = "Number of HTTP requests received"
-  }
-  metric {
-    name = wcache_RequestFailureRatio
-    title = "Request failure ratio"
-  }
-  metric {
-    name = wcache_StorageSwapCapacity
-    title = "Storage Swap capacity"
-  }
-  metric {
-    name = wcache_StorageMemCapacity
-    title = "Storage Mem capacity"
-  }
-  metric {
-    name = wcache_MeanObjectSize
-    title = "Mean Object Size"
-  }
-  metric {
-    name = wcache_ServiceTime
-    title = "Median Service Times"
-  }
-  metric {
-    name = wcache_HitServiceTime
-    title = "Hit Median Service Times"
-  }
-  metric {
-    name = wcache_MissServiceTime
-    title = "Miss Median Service Times"
-  }
-  metric {
-    name = wcache_StoreEntries
-    title = "StoreEntries"
-  }
-  metric {
-    name = wcache_MemStoreEntries
-    title = "StoreEntries with MemObjects"
-  }
-}
-
-
-```
-
-
-**Modules**:对每个模块进行配置  
-**name**:模块名,同时必须与创建的python文件名一致  
-**language**: 语言  
-**param**:参数列表，所有的参数作为一个dict(即map)传给python脚本的metric_init(params)函数。  
-
-
-**collection_group**:需要收集的metric列表，一个模块中可以扩展任意个metric  
-**collect_every**: 汇报周期，以秒为单位。  
-**metric**：可以有多个，定义每个metric的信息。  
-
-
-
-##4.3 graph 配置
-
-数据收集完成后，还需要将数据已图表的形式展示在Ganglia web界面中。所以需要配置前端数据展示方式
-
-为了将几个相同的属性放置到一张report图表中，配置如下
-
-/var/www/html/ganglia/graph.d/wcache_HitRatio_1h_report.json
-
-```python
-{
-    "report_name": "wcache_HitRatio_1h_report",
-    "report_type": "standard",
-    "title": "wcache 1 hour HitRatio",
-    "vertical_label": "precent",
-    "series": [{
-        "metric": "wcache_ReqHitRatio_1h",
-        "color": "3366ff",
-        "label": "ReqHitRatio",
-        "line_width": "2",
-        "type": "line"
-    }, {
-        "metric": "wcache_ByteHitRatio_1h",
-        "color": "cc99ff",
-        "label": "ByteHitRatio",
-        "line_width": "2",
-        "type": "line"
-    }, {
-        "metric": "wcache_MemHitRatio_1h",
-        "color": "ff3366",
-        "label": "MemHitRatio",
-        "line_width": "2",
-        "type": "line"
-    }, {
-        "metric": "wcache_DiskHitRatio_1h",
-        "color": "00ff00",
-        "label": "DiskHitRatio",
-        "line_width": "2",
-        "type": "line"
-    }]
-}
-
-```
-
-
-配置完成后，report图表还不会显示到ganglia-web 上，需要修改
-/var/lib/ganglia-web/conf/default.json,将wcache_HitRatio_1h_report 加入
-```json
-{
-    "included_reports": ["load_report", "mem_report", "cpu_report", "multicpu_idle_report", "network_report", "wcache_HitRatio_1h_report"]
-}
-
-```
-
-
-所有脚本配置完成后，重新启动gmond 服务。观察前端web数据，查看模块添加是否成功 。
-
-
